@@ -58,9 +58,9 @@ func (ic *ImapClient) Close() {
 
 func (ic *ImapClient) List(ref, name string) ([]*imap.MailboxInfo, error) {
 	ch := make(chan *imap.MailboxInfo, 10)
-	var err error
+	done := make(chan error)
 	go func() {
-		err = ic.cli.List(ref, name, ch)
+		done <- ic.cli.List(ref, name, ch)
 	}()
 
 	ret := []*imap.MailboxInfo{}
@@ -68,6 +68,7 @@ func (ic *ImapClient) List(ref, name string) ([]*imap.MailboxInfo, error) {
 		ret = append(ret, mbox)
 	}
 
+	err := <-done
 	if err != nil {
 		return nil, err
 	} else {
