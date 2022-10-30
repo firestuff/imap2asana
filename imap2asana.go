@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -24,7 +23,9 @@ func main() {
 
 	defer ic.Close()
 
-	err = Poll(ic)
+	ac := NewAsanaClient()
+
+	err = Poll(ic, ac)
 	if err != nil {
 		log.Printf("%s", err)
 	}
@@ -32,7 +33,7 @@ func main() {
 	for {
 		time.Sleep(time.Duration(rand.Intn(60)) * time.Second)
 
-		err := Poll(ic)
+		err := Poll(ic, ac)
 		if err != nil {
 			log.Printf("%s", err)
 		}
@@ -44,15 +45,24 @@ type Task struct {
 	HtmlNotes string
 }
 
-func Poll(ic *ImapClient) error {
+func Poll(ic *ImapClient, ac *AsanaClient) error {
 	tasks, err := ic.Poll()
 	if err != nil {
 		return err
 	}
 
-	for _, task := range tasks {
-		fmt.Printf("%#v\n", task)
+	if len(tasks) < 1 {
+		return nil
 	}
 
-	return nil
+	for _, task := range tasks {
+		log.Printf("%s", task.Name)
+
+		err = ac.CreateTask(task.Name, task.HtmlNotes)
+		if err != nil {
+			return err
+		}
+	}
+
+	return ic.Archive(len(tasks))
 }

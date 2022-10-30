@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/mail"
+	"strings"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
@@ -65,17 +67,30 @@ func (ic *ImapClient) Poll() ([]*Task, error) {
 			return nil, err
 		}
 
+		d, err := msg.Header.Date()
+		if err != nil {
+			return nil, err
+		}
+
 		ret = append(ret, &Task{
 			Name: msg.Header.Get("Subject"),
+			HtmlNotes: fmt.Sprintf(
+				"<body>From: %s\nTo: %s\nDate: %s</body>",
+				ic.escape(msg.Header.Get("From")),
+				ic.escape(msg.Header.Get("To")),
+				ic.escape(d.Local().Format("Monday, 2006-01-02 15h04 -0700")),
+			),
 		})
 	}
 
-	err = ic.Move(seqset, ic.toFolder)
-	if err != nil {
-		return nil, err
-	}
-
 	return ret, nil
+}
+
+func (ic *ImapClient) Archive(num int) error {
+	seqset := &imap.SeqSet{}
+	seqset.AddRange(1, uint32(num))
+
+	return ic.Move(seqset, ic.toFolder)
 }
 
 func (ic *ImapClient) List(ref, name string) ([]*imap.MailboxInfo, error) {
@@ -124,4 +139,11 @@ func (ic *ImapClient) Select(name string, readonly bool) (*imap.MailboxStatus, e
 
 func (ic *ImapClient) Move(seqset *imap.SeqSet, dest string) error {
 	return ic.cli.Move(seqset, dest)
+}
+
+func (ic *ImapClient) escape(in string) string {
+	in = strings.ReplaceAll(in, "<", "&lt;")
+	in = strings.ReplaceAll(in, ">", "&gt;")
+	in = strings.ReplaceAll(in, `"`, "&quot;")
+	return in
 }
