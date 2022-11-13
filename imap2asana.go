@@ -43,6 +43,7 @@ func main() {
 type Task struct {
 	Name      string
 	HtmlNotes string
+	Uid       uint32
 }
 
 func Poll(ic *ImapClient, ac *AsanaClient) error {
@@ -62,7 +63,12 @@ func Poll(ic *ImapClient, ac *AsanaClient) error {
 		if err != nil {
 			return err
 		}
+
+		err = ic.Archive(task)
+		if err != nil {
+			return err
+		}
 	}
 
-	return ic.Archive(len(tasks))
+	return nil
 }

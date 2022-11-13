@@ -55,7 +55,7 @@ func (ic *ImapClient) Poll() ([]*Task, error) {
 
 	section := &imap.BodySectionName{}
 
-	msgs, err := ic.Fetch(seqset, []imap.FetchItem{section.FetchItem()})
+	msgs, err := ic.Fetch(seqset, []imap.FetchItem{section.FetchItem(), imap.FetchUid})
 	if err != nil {
 		return nil, err
 	}
@@ -63,18 +63,18 @@ func (ic *ImapClient) Poll() ([]*Task, error) {
 	ret := []*Task{}
 
 	for _, msg := range msgs {
-		msg, err := mail.ReadMessage(msg.GetBody(section))
+		m, err := mail.ReadMessage(msg.GetBody(section))
 		if err != nil {
 			return nil, err
 		}
 
-		d, err := msg.Header.Date()
+		d, err := m.Header.Date()
 		if err != nil {
 			return nil, err
 		}
 
 		wd := &mime.WordDecoder{}
-		s, err := wd.DecodeHeader(msg.Header.Get("Subject"))
+		s, err := wd.DecodeHeader(m.Header.Get("Subject"))
 		if err != nil {
 			return nil, err
 		}
@@ -83,20 +83,20 @@ func (ic *ImapClient) Poll() ([]*Task, error) {
 			Name: s,
 			HtmlNotes: fmt.Sprintf(
 				"<body>From: %s\nTo: %s\nDate: %s</body>",
-				ic.escape(msg.Header.Get("From")),
-				ic.escape(msg.Header.Get("To")),
+				ic.escape(m.Header.Get("From")),
+				ic.escape(m.Header.Get("To")),
 				ic.escape(d.Local().Format("Monday, 2006-01-02 15h04 -0700")),
 			),
+			Uid: msg.Uid,
 		})
 	}
 
 	return ret, nil
 }
 
-func (ic *ImapClient) Archive(num int) error {
+func (ic *ImapClient) Archive(task *Task) error {
 	seqset := &imap.SeqSet{}
-	seqset.AddRange(1, uint32(num))
-
+	seqset.AddNum(task.Uid)
 	return ic.Move(seqset, ic.toFolder)
 }
 
@@ -145,7 +145,7 @@ func (ic *ImapClient) Select(name string, readonly bool) (*imap.MailboxStatus, e
 }
 
 func (ic *ImapClient) Move(seqset *imap.SeqSet, dest string) error {
-	return ic.cli.Move(seqset, dest)
+	return ic.cli.UidMove(seqset, dest)
 }
 
 func (ic *ImapClient) escape(in string) string {
