@@ -57,11 +57,13 @@ func Poll(ic *ImapClient, ac *AsanaClient) error {
 	}
 
 	for _, task := range tasks {
-		log.Printf("%s", task.Name)
+		if task.Name != "" {
+			log.Printf("%s", task.Name)
 
-		err = ac.CreateTask(task.Name, task.HtmlNotes)
-		if err != nil {
-			return err
+			err = ac.CreateTask(task.Name, task.HtmlNotes)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = ic.Archive(task)

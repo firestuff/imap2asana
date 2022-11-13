@@ -55,7 +55,7 @@ func (ic *ImapClient) Poll() ([]*Task, error) {
 
 	section := &imap.BodySectionName{}
 
-	msgs, err := ic.Fetch(seqset, []imap.FetchItem{section.FetchItem(), imap.FetchUid})
+	msgs, err := ic.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid, section.FetchItem()})
 	if err != nil {
 		return nil, err
 	}
