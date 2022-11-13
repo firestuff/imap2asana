@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"mime"
 	"net/mail"
 	"strings"
 
@@ -72,8 +73,14 @@ func (ic *ImapClient) Poll() ([]*Task, error) {
 			return nil, err
 		}
 
+		wd := &mime.WordDecoder{}
+		s, err := wd.DecodeHeader(msg.Header.Get("Subject"))
+		if err != nil {
+			return nil, err
+		}
+
 		ret = append(ret, &Task{
-			Name: msg.Header.Get("Subject"),
+			Name: s,
 			HtmlNotes: fmt.Sprintf(
 				"<body>From: %s\nTo: %s\nDate: %s</body>",
 				ic.escape(msg.Header.Get("From")),
