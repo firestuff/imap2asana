@@ -25,15 +25,13 @@ func main() {
 
 	ac := NewAsanaClient()
 
-	err = Poll(ic, ac)
-	if err != nil {
-		log.Printf("%s", err)
-	}
-
 	for {
-		time.Sleep(time.Duration(rand.Intn(60)) * time.Second)
-
 		err := Poll(ic, ac)
+		if err != nil {
+			log.Printf("%s", err)
+		}
+
+		err = ic.Wait()
 		if err != nil {
 			log.Printf("%s", err)
 		}

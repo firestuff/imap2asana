@@ -2,16 +2,19 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"mime"
 	"net/mail"
 	"strings"
+	"time"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 )
 
 type ImapClient struct {
-	cli *client.Client
+	cli     *client.Client
+	updates chan client.Update
 
 	fromFolder string
 	toFolder   string
@@ -23,7 +26,16 @@ func NewImapClient(host, user, pass, fromFolder, toFolder string) (*ImapClient, 
 		return nil, err
 	}
 
+	updates := make(chan client.Update, 100)
+	c.Updates = updates
+
 	err = c.Login(user, pass)
+	if err != nil {
+		c.Logout()
+		return nil, err
+	}
+
+	_, err = c.Select(fromFolder, false)
 	if err != nil {
 		c.Logout()
 		return nil, err
@@ -31,6 +43,7 @@ func NewImapClient(host, user, pass, fromFolder, toFolder string) (*ImapClient, 
 
 	return &ImapClient{
 		cli:        c,
+		updates:    updates,
 		fromFolder: fromFolder,
 		toFolder:   toFolder,
 	}, nil
@@ -41,10 +54,12 @@ func (ic *ImapClient) Close() {
 }
 
 func (ic *ImapClient) Poll() ([]*Task, error) {
-	mbox, err := ic.Select(ic.fromFolder, false)
+	mbox, err := ic.cli.Status(ic.fromFolder, []imap.StatusItem{imap.StatusMessages})
 	if err != nil {
 		return nil, err
 	}
+
+	ic.drainUpdates()
 
 	if mbox.Messages < 1 {
 		return []*Task{}, nil
@@ -140,12 +155,46 @@ func (ic *ImapClient) Fetch(seqset *imap.SeqSet, toFetch []imap.FetchItem) ([]*i
 	}
 }
 
-func (ic *ImapClient) Select(name string, readonly bool) (*imap.MailboxStatus, error) {
-	return ic.cli.Select(name, readonly)
-}
-
 func (ic *ImapClient) Move(seqset *imap.SeqSet, dest string) error {
 	return ic.cli.UidMove(seqset, dest)
+}
+
+func (ic *ImapClient) Wait() error {
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- ic.cli.Idle(stop, &client.IdleOptions{
+			LogoutTimeout: -1,
+			PollInterval:  -1,
+		})
+	}()
+
+	select {
+	case err := <-done:
+		// Never times out, so error
+		return err
+
+	case <-time.After(time.Duration(rand.Intn(60)) * time.Second):
+		close(stop)
+		<-done
+		return nil
+
+	case <-ic.updates:
+		close(stop)
+		<-done
+		return nil
+	}
+}
+
+func (ic *ImapClient) drainUpdates() {
+	for {
+		select {
+		case <-ic.updates:
+
+		default:
+			return
+		}
+	}
 }
 
 func (ic *ImapClient) escape(in string) string {
